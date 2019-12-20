@@ -8,7 +8,7 @@ import com.example.test01.demo.httpModel.auth.JwtAuthResponse;
 import com.example.test01.demo.httpModel.auth.LogInRequest;
 import com.example.test01.demo.httpModel.auth.LogInResponse;
 import com.example.test01.demo.httpModel.auth.SignUpRequest;
-import com.example.test01.demo.httpModel.auth.VerifyRequest;
+import com.example.test01.demo.httpModel.auth.VerifyInRequest;
 import com.example.test01.demo.security.JwtProvider;
 import com.example.test01.demo.service.UserServiceImpl;
 import lombok.AllArgsConstructor;
@@ -46,14 +46,14 @@ public class AuthController {
         final Optional<UserIn> user = userService.logIn(request);
         if(user.isPresent()){
             return ResponseEntity.ok(CustomSuccessResponse.success(LogInResponse.builder()
-                            .authyId(user.get().getAuthyId())
+                            .user(user.get())
                             .build()));
         }
         return ResponseEntity.badRequest().body(CustomErrorResponse.fail("Bad User Information", LogInResponse.class));
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<CustomResponse<JwtAuthResponse>> verify(final @Validated @RequestBody VerifyRequest request){
+    public ResponseEntity<CustomResponse<JwtAuthResponse>> verify(final @Validated @RequestBody VerifyInRequest request){
         final Optional<UserIn> user = userService.verify(request);
         if(user.isPresent()){
             return ResponseEntity.ok(CustomSuccessResponse.success(generateJWTResponse(user.get())));

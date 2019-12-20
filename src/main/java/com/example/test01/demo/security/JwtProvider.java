@@ -1,6 +1,5 @@
 package com.example.test01.demo.security;
 
-
 import com.example.test01.demo.entity.UserIn;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -12,8 +11,11 @@ import io.jsonwebtoken.UnsupportedJwtException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Base64;
 import java.util.Date;
 
 @Component
@@ -30,6 +32,17 @@ public class JwtProvider {
     @Value("${app.jwtRefreshExpirationInMs}")
     private int jwtRefreshExpirationInMs;
 
+    private SecretKey decodeKeyFromString(final String keyStr) {
+        /* Decodes a Base64 encoded String into a byte array */
+        final byte[] decodedKey = Base64.getDecoder().decode(keyStr);
+
+        /* Constructs a secret key from the given byte array */
+        final SecretKey secretKey = new SecretKeySpec(decodedKey, 0,
+                decodedKey.length, "HmacSHA512");
+
+        return secretKey;
+    }
+
     public String generateToken(final UserIn user){
         final LocalDateTime now = LocalDateTime.now();
         final LocalDateTime expire = now.plusSeconds(jwtExpirationInMs);
@@ -37,7 +50,7 @@ public class JwtProvider {
                 .setSubject(Long.toString(user.getId()))
                 .setIssuedAt(Date.from(now.atZone(ZoneId.systemDefault()).toInstant()))
                 .setExpiration(Date.from(expire.atZone(ZoneId.systemDefault()).toInstant()))
-                .signWith(SignatureAlgorithm.HS512,jwtSecret)
+                .signWith(decodeKeyFromString(jwtSecret),SignatureAlgorithm.HS512)
                 .compact();
     }
 
@@ -57,7 +70,7 @@ public class JwtProvider {
                 .setSubject(Long.toString(user.getId()))
                 .setIssuedAt(Date.from(now.atZone(ZoneId.systemDefault()).toInstant()))
                 .setExpiration(Date.from(expire.atZone(ZoneId.systemDefault()).toInstant()))
-                .signWith(SignatureAlgorithm.HS384,jwtRefreshSecret)
+                .signWith(decodeKeyFromString(jwtRefreshSecret),SignatureAlgorithm.HS512)
                 .compact();
     }
 

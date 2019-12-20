@@ -1,6 +1,5 @@
 package com.example.test01.demo.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,28 +9,27 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.OneToOne;
 import javax.persistence.Table;
-import javax.validation.constraints.NotNull;
+import java.time.LocalDateTime;
+
 
 @Entity
 @Data
-@Table(name = "Users")
+@Table(name = "Verifications")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserIn {
+public class VerifyIn {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotNull
-    private String email;
+    @OneToOne
+    private UserIn user;
 
-    @NotNull
-    private String phone;
+    private String nexmoId;
 
-    @NotNull
-    @JsonIgnore
-    private String password;
+    private LocalDateTime expiration;
 
 }

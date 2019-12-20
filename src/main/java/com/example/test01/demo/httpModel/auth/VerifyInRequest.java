@@ -6,10 +6,10 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
 @Data
-public class VerifyRequest {
+public class VerifyInRequest {
 
     @NotNull
-    private int authyId;
+    private Long userId;
 
     @NotBlank
     private String code;

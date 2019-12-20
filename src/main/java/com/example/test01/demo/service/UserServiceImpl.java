@@ -1,22 +1,23 @@
 package com.example.test01.demo.service;
 
-import com.authy.AuthyException;
-import com.authy.api.Hash;
-import com.authy.api.Token;
-import com.authy.api.Tokens;
-import com.authy.api.User;
-import com.authy.api.Users;
 import com.example.test01.demo.entity.UserIn;
+import com.example.test01.demo.entity.VerifyIn;
 import com.example.test01.demo.httpModel.auth.LogInRequest;
 import com.example.test01.demo.httpModel.auth.SignUpRequest;
-import com.example.test01.demo.httpModel.auth.VerifyRequest;
+import com.example.test01.demo.httpModel.auth.VerifyInRequest;
 import com.example.test01.demo.repository.UserRepository;
+import com.example.test01.demo.repository.VerifyRepository;
 import com.example.test01.demo.security.JwtProvider;
+import com.nexmo.client.NexmoClientException;
+import com.nexmo.client.verify.VerifyClient;
+import com.nexmo.client.verify.VerifyRequest;
+import com.nexmo.client.verify.VerifyResponse;
+import com.nexmo.client.verify.VerifyStatus;
 import lombok.AllArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.authy.AuthyApiClient;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,19 +26,20 @@ import java.util.Optional;
 @AllArgsConstructor
 public class UserServiceImpl implements UserService{
     private final UserRepository userRepository;
+    private final VerifyRepository verifyRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuthyApiClient authyApiClient;
+    private final VerifyClient verifyClient;
     private final JwtProvider jwtProvider;
+
+    private static final int EXPIRATION_INCREMENT = 5;
+
     @Override
     public Optional<UserIn> createUser(final SignUpRequest request){
-        final int authyId = createAuthy(request);
-        if(!userRepository.existsByAuthyId(authyId)) {
+        if(!userRepository.existsByEmail(request.getEmail())) {
             final UserIn user = UserIn.builder()
                     .email(request.getEmail())
                     .password(passwordEncoder.encode(request.getPassword()))
                     .phone(request.getPhone())
-                    .countryCode(request.getCountryCode())
-                    .authyId(authyId)
                     .build();
             userRepository.save(user);
             return Optional.of(user);
@@ -51,25 +53,17 @@ public class UserServiceImpl implements UserService{
         if(!user.isPresent() || !passwordEncoder.matches(request.getPassword(),user.get().getPassword())){
             return Optional.empty();
         }
-        sendSMS(user.get().getAuthyId());
+        sendSMS(user.get());
         return user;
     }
-
     @Override
-    public Optional<UserIn> verify(VerifyRequest request) {
-        try {
-            final Tokens tokens = authyApiClient.getTokens();
-            final Token response = tokens.verify(request.getAuthyId(), request.getCode());
-            if (response.isOk()) {
-                return userRepository.findByAuthyId(request.getAuthyId());
-            }
-            else{
-                return Optional.empty();
-            }
-        } catch (AuthyException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Invalid code for user");
+    public Optional<UserIn> verify(VerifyInRequest request){
+        final Optional<VerifyIn> verification = verifyRepository.findByUserId(request.getUserId());
+        if(verification.isPresent() && verifyClient.check(verification.get().getNexmoId(),request.getCode()).getStatus().equals(VerifyStatus.OK)){
+            verifyRepository.delete(verification.get());
+            return userRepository.findById(request.getUserId());
         }
+        return Optional.empty();
     }
 
     @Override
@@ -86,32 +80,28 @@ public class UserServiceImpl implements UserService{
         throw new RuntimeException("Invalid token");
     }
 
+    private void sendSMS(final UserIn user){
 
-    private void sendSMS(final int authyId){
-        final Users users = authyApiClient.getUsers();
         try {
-            final Hash response = users.requestSms(authyId);
-            if (!response.isOk()) {
-                throw new RuntimeException("Unable to send SMS");
+            final VerifyRequest request = new VerifyRequest(user.getPhone(), "nexmo-app");
+            request.setLength(6);
+            final VerifyResponse response = verifyClient.verify(request);
+            if (response.getStatus().equals(VerifyStatus.OK)) {
+                final String requestId = response.getRequestId();
+                final LocalDateTime now = LocalDateTime.now().plusMinutes(EXPIRATION_INCREMENT);
+                final VerifyIn verification = verifyRepository.findByUserId(user.getId())
+                        .orElse(VerifyIn.builder()
+                                .user(user)
+                                .build());
+                verification.setExpiration(now);
+                verification.setNexmoId(requestId);
+                verifyRepository.save(verification);
             }
-        } catch (AuthyException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Unable to send SMS");
+            else{
+                throw new RuntimeException("Unable to send the SMS");
+            }
+        } catch ( NexmoClientException e) {
+            throw new RuntimeException(e);
         }
-    }
-
-    private int createAuthy(final SignUpRequest request){
-        final Users users = authyApiClient.getUsers();
-        final User authyUser;
-        try {
-            authyUser = users.createUser(
-                    request.getEmail(),
-                    request.getPhone(),
-                    request.getCountryCode());
-        } catch (AuthyException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Unable to create user");
-        }
-        return authyUser.getId();
     }
 }

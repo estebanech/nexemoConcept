@@ -13,8 +13,5 @@ public class SignUpRequest {
     private String phone;
 
     @NotBlank
-    private String countryCode;
-
-    @NotBlank
     private String password;
 }
